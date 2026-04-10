@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Braindump</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    letter-spacing: -0.5px;
+  }
+  .composer {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    margin-bottom: 24px;
+  }
+  textarea {
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.5;
+    min-height: 80px;
+    background: transparent;
+    color: #1d1d1f;
+  }
+  textarea::placeholder { color: #a1a1a6; }
+  .composer-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  button {
+    background: #007aff;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: #0062cc; }
+  button:disabled { background: #c7c7cc; cursor: not-allowed; }
+  .entries {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .entry {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    position: relative;
+    transition: transform 0.15s ease;
+  }
+  .entry:hover { transform: translateY(-1px); }
+  .entry-text {
+    font-size: 15px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding-right: 28px;
+  }
+  .entry-date {
+    font-size: 12px;
+    color: #86868b;
+    margin-top: 8px;
+  }
+  .delete-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: transparent;
+    color: #a1a1a6;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .delete-btn:hover { background: #ffebeb; color: #ff3b30; }
+  .empty {
+    text-align: center;
+    color: #86868b;
+    padding: 40px 20px;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Braindump</h1>
+    <div class="composer">
+      <textarea id="input" placeholder="Co mas na mysli?"></textarea>
+      <div class="composer-actions">
+        <button id="addBtn" type="button">Pridat</button>
+      </div>
+    </div>
+    <div class="entries" id="entries"></div>
+  </div>
+
+<script>
+  const STORAGE_KEY = 'braindump-entries';
+  const input = document.getElementById('input');
+  const addBtn = document.getElementById('addBtn');
+  const entriesEl = document.getElementById('entries');
+
+  let memoryStore = null;
+  let storageAvailable = true;
+  try {
+    const t = '__test__';
+    localStorage.setItem(t, t);
+    localStorage.removeItem(t);
+  } catch {
+    storageAvailable = false;
+    memoryStore = [];
+  }
+
+  function loadEntries() {
+    if (!storageAvailable) return memoryStore;
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveEntries(entries) {
+    if (!storageAvailable) {
+      memoryStore = entries;
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch (e) {
+      storageAvailable = false;
+      memoryStore = entries;
+    }
+  }
+
+  function formatDate(ts) {
+    const d = new Date(ts);
+    return d.toLocaleString('sk-SK', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function render() {
+    const entries = loadEntries();
+    if (entries.length === 0) {
+      entriesEl.innerHTML = '<div class="empty">Zatial ziadne poznamky</div>';
+      return;
+    }
+    entriesEl.innerHTML = '';
+    entries.forEach(entry => {
+      const div = document.createElement('div');
+      div.className = 'entry';
+
+      const text = document.createElement('div');
+      text.className = 'entry-text';
+      text.textContent = entry.text;
+
+      const date = document.createElement('div');
+      date.className = 'entry-date';
+      date.textContent = formatDate(entry.createdAt);
+
+      const del = document.createElement('button');
+      del.className = 'delete-btn';
+      del.textContent = '×';
+      del.title = 'Zmazat';
+      del.onclick = () => deleteEntry(entry.id);
+
+      div.appendChild(text);
+      div.appendChild(date);
+      div.appendChild(del);
+      entriesEl.appendChild(div);
+    });
+  }
+
+  function addEntry() {
+    const text = input.value.trim();
+    if (!text) return;
+    const entries = loadEntries();
+    entries.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      text,
+      createdAt: Date.now()
+    });
+    saveEntries(entries);
+    input.value = '';
+    render();
+    input.focus();
+  }
+
+  function deleteEntry(id) {
+    const entries = loadEntries().filter(e => e.id !== id);
+    saveEntries(entries);
+    render();
+  }
+
+  addBtn.addEventListener('click', addEntry);
+  input.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') addEntry();
+  });
+
+  render();
+</script>
+</body>
+</html>
